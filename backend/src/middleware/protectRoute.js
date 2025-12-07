@@ -7,8 +7,12 @@ export const protectRoute = [
   async (req, res, next) => {
     try {
       const clerkId = req.auth().userId;
+      console.log("protectRoute: clerkId =", clerkId);
 
-      if (!clerkId) return res.status(401).json({ message: "Unauthorized - invalid token" });
+      if (!clerkId) {
+        console.error("protectRoute: No clerkId found - returning 401");
+        return res.status(401).json({ message: "Unauthorized - invalid token" });
+      }
 
       // find user in db by clerk ID, or create if doesn't exist
       let user = await User.findOne({ clerkId });

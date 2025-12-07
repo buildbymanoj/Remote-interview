@@ -4,29 +4,38 @@ import Invitation from "../models/Invitation.js";
 
 export async function createSession(req, res) {
   try {
+    console.log("createSession called with body:", req.body);
     const { problem, difficulty, type = "open", invitedEmails = [] } = req.body;
     const userId = req.user._id;
     const clerkId = req.user.clerkId;
+    console.log("createSession - userId:", userId, "clerkId:", clerkId);
 
     if (!problem || !difficulty) {
+      console.error("createSession - Missing required fields");
       return res.status(400).json({ message: "Problem and difficulty are required" });
     }
 
     // generate a unique call id for stream video
     const callId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    console.log("createSession - Generated callId:", callId);
 
     // create session in db
+    console.log("createSession - Creating session in DB...");
     const session = await Session.create({ problem, difficulty, type, host: userId, callId });
+    console.log("createSession - Session created:", session._id);
 
     // create stream video call
+    console.log("createSession - Creating Stream video call...");
     await streamClient.video.call("default", callId).getOrCreate({
       data: {
         created_by_id: clerkId,
         custom: { problem, difficulty, sessionId: session._id.toString() },
       },
     });
+    console.log("createSession - Stream video call created");
 
     // chat messaging
+    console.log("createSession - Creating chat channel...");
     const channel = chatClient.channel("messaging", callId, {
       name: `${problem} Session`,
       created_by_id: clerkId,
@@ -34,16 +43,20 @@ export async function createSession(req, res) {
     });
 
     await channel.create();
+    console.log("createSession - Chat channel created");
 
     // if custom session, create invitations
     if (type === "custom" && invitedEmails.length > 0) {
+      console.log("createSession - Creating invitations for:", invitedEmails);
       const invitations = invitedEmails.map(email => ({
         session: session._id,
         email,
       }));
       await Invitation.insertMany(invitations);
+      console.log("createSession - Invitations created");
     }
 
+    console.log("createSession - Success!");
     res.status(201).json({ session });
   } catch (error) {
     console.error("createSession failure", {
