@@ -46,8 +46,17 @@ export async function createSession(req, res) {
 
     res.status(201).json({ session });
   } catch (error) {
-    console.log("Error in createSession controller:", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error("createSession failure", {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data,
+      code: error.code,
+    });
+
+    res.status(500).json({
+      message: "Failed to create session",
+      detail: error.message,
+    });
   }
 }
 
