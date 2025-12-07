@@ -1,9 +1,10 @@
 import { chatClient, streamClient } from "../lib/stream.js";
 import Session from "../models/Session.js";
+import Invitation from "../models/Invitation.js";
 
 export async function createSession(req, res) {
   try {
-    const { problem, difficulty } = req.body;
+    const { problem, difficulty, type = "open", invitedEmails = [] } = req.body;
     const userId = req.user._id;
     const clerkId = req.user.clerkId;
 
@@ -15,7 +16,7 @@ export async function createSession(req, res) {
     const callId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     // create session in db
-    const session = await Session.create({ problem, difficulty, host: userId, callId });
+    const session = await Session.create({ problem, difficulty, type, host: userId, callId });
 
     // create stream video call
     await streamClient.video.call("default", callId).getOrCreate({
@@ -34,6 +35,15 @@ export async function createSession(req, res) {
 
     await channel.create();
 
+    // if custom session, create invitations
+    if (type === "custom" && invitedEmails.length > 0) {
+      const invitations = invitedEmails.map(email => ({
+        session: session._id,
+        email,
+      }));
+      await Invitation.insertMany(invitations);
+    }
+
     res.status(201).json({ session });
   } catch (error) {
     console.log("Error in createSession controller:", error.message);
@@ -41,15 +51,43 @@ export async function createSession(req, res) {
   }
 }
 
-export async function getActiveSessions(_, res) {
+export async function getActiveSessions(req, res) {
   try {
-    const sessions = await Session.find({ status: "active" })
+    const userId = req.user._id;
+    const userEmail = req.user.email;
+
+    // Find all session IDs where user is invited
+    const invitations = await Invitation.find({ email: userEmail }).select("session");
+    const invitedSessionIds = invitations.map((i) => i.session);
+
+    const sessions = await Session.find({
+      status: "active",
+      $or: [
+        // Explicitly check for "open" type
+        { type: "open" },
+        // Or if the user is the host
+        { host: userId },
+        // Or if the user is the participant
+        { participant: userId },
+        // Or if the user is invited
+        { _id: { $in: invitedSessionIds } },
+      ],
+    })
       .populate("host", "name profileImage email clerkId")
       .populate("participant", "name profileImage email clerkId")
       .sort({ createdAt: -1 })
       .limit(20);
 
-    res.status(200).json({ sessions });
+    // Filter out any sessions that might have slipped through (double check)
+    const filteredSessions = sessions.filter((session) => {
+      if (session.type === "open") return true;
+      if (session.host._id.toString() === userId.toString()) return true;
+      if (session.participant?._id.toString() === userId.toString()) return true;
+      if (invitedSessionIds.some((id) => id.toString() === session._id.toString())) return true;
+      return false;
+    });
+
+    res.status(200).json({ sessions: filteredSessions });
   } catch (error) {
     console.log("Error in getActiveSessions controller:", error.message);
     res.status(500).json({ message: "Internal Server Error" });
@@ -78,12 +116,32 @@ export async function getMyRecentSessions(req, res) {
 export async function getSessionById(req, res) {
   try {
     const { id } = req.params;
+    const userId = req.user._id;
+    const userEmail = req.user.email;
 
     const session = await Session.findById(id)
       .populate("host", "name email profileImage clerkId")
       .populate("participant", "name email profileImage clerkId");
 
     if (!session) return res.status(404).json({ message: "Session not found" });
+
+    // if custom session, check if user is host or invited
+    if (session.type === "custom") {
+      const isHost = session.host._id.toString() === userId.toString();
+      const isParticipant = session.participant?._id.toString() === userId.toString();
+      
+      if (!isHost && !isParticipant) {
+        // check if user is invited
+        const invitation = await Invitation.findOne({
+          session: id,
+          email: userEmail,
+        });
+        
+        if (!invitation) {
+          return res.status(403).json({ message: "You are not invited to this session" });
+        }
+      }
+    }
 
     res.status(200).json({ session });
   } catch (error) {
@@ -97,6 +155,7 @@ export async function joinSession(req, res) {
     const { id } = req.params;
     const userId = req.user._id;
     const clerkId = req.user.clerkId;
+    const userEmail = req.user.email;
 
     const session = await Session.findById(id);
 
@@ -112,6 +171,24 @@ export async function joinSession(req, res) {
 
     // check if session is already full - has a participant
     if (session.participant) return res.status(409).json({ message: "Session is full" });
+
+    // if custom session, check invitation
+    if (session.type === "custom") {
+      const invitation = await Invitation.findOne({
+        session: id,
+        email: userEmail,
+      });
+      
+      if (!invitation) {
+        return res.status(403).json({ message: "You are not invited to this session" });
+      }
+      
+      // accept invitation if pending
+      if (invitation.status === "pending") {
+        invitation.status = "accepted";
+        await invitation.save();
+      }
+    }
 
     session.participant = userId;
     await session.save();
@@ -159,6 +236,24 @@ export async function endSession(req, res) {
     res.status(200).json({ session, message: "Session ended successfully" });
   } catch (error) {
     console.log("Error in endSession controller:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
+export async function getMyInvitations(req, res) {
+  try {
+    const userEmail = req.user.email;
+
+    const invitations = await Invitation.find({ email: userEmail, status: "pending" })
+      .populate({
+        path: "session",
+        populate: { path: "host", select: "name profileImage email" },
+      })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ invitations });
+  } catch (error) {
+    console.log("Error in getMyInvitations controller:", error.message);
     res.status(500).json({ message: "Internal Server Error" });
   }
 }

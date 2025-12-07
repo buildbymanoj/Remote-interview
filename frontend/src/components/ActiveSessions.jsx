@@ -11,6 +11,11 @@ import { Link } from "react-router";
 import { getDifficultyBadgeClass } from "../lib/utils";
 
 function ActiveSessions({ sessions, isLoading, isUserInSession }) {
+  // Backend now handles filtering, so we can trust the sessions list
+  // But we can keep a safety check if needed, or just use sessions directly
+  // Since we want to show invited sessions now, we should remove the strict client-side filter
+  // that was hiding them if not joined.
+  
   return (
     <div className="lg:col-span-2 card bg-base-100 border-2 border-primary/30 hover:border-primary/40 transition-all duration-300 h-full shadow-xl">
       <div className="card-body p-4 sm:p-6">

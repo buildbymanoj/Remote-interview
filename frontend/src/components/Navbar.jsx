@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { BookOpenIcon, Code2Icon, LayoutDashboardIcon, MenuIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, Code2Icon, LayoutDashboardIcon, MailIcon, MenuIcon, XIcon } from "lucide-react";
 import { UserButton } from "@clerk/clerk-react";
 import ThemeSelector from "./ThemeSelector";
 import { useState } from "react";
@@ -44,6 +44,20 @@ function Navbar() {
               <div className="flex items-center gap-x-2.5">
                 <BookOpenIcon className="size-4" />
                 <span className="font-medium">Problems</span>
+              </div>
+            </Link>
+
+            <Link
+              to="/inbox"
+              className={`px-4 py-2.5 rounded-lg transition-all duration-200 ${
+                isActive("/inbox")
+                  ? "bg-primary text-primary-content shadow-lg"
+                  : "hover:bg-base-200 text-base-content/70 hover:text-base-content"
+              }`}
+            >
+              <div className="flex items-center gap-x-2.5">
+                <MailIcon className="size-4" />
+                <span className="font-medium">Inbox</span>
               </div>
             </Link>
 
@@ -96,6 +110,18 @@ function Navbar() {
             >
               <BookOpenIcon className="size-5" />
               <span className="font-medium">Problems</span>
+            </Link>
+            <Link
+              to="/inbox"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                isActive("/inbox")
+                  ? "bg-primary text-primary-content"
+                  : "hover:bg-base-200"
+              }`}
+            >
+              <MailIcon className="size-5" />
+              <span className="font-medium">Inbox</span>
             </Link>
             <Link
               to="/dashboard"

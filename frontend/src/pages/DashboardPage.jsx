@@ -15,7 +15,7 @@ function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useUser();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [roomConfig, setRoomConfig] = useState({ problem: "", difficulty: "" });
+  const [roomConfig, setRoomConfig] = useState({ problem: "", difficulty: "", type: "open", invitedEmails: "" });
 
   const createSessionMutation = useCreateSession();
 
@@ -24,11 +24,18 @@ function DashboardPage() {
 
   const handleCreateRoom = () => {
     if (!roomConfig.problem || !roomConfig.difficulty) return;
+    if (roomConfig.type === "custom" && !roomConfig.invitedEmails.trim()) return;
+
+    const invitedEmails = roomConfig.type === "custom"
+      ? roomConfig.invitedEmails.split('\n').map(email => email.trim()).filter(email => email)
+      : [];
 
     createSessionMutation.mutate(
       {
         problem: roomConfig.problem,
         difficulty: roomConfig.difficulty.toLowerCase(),
+        type: roomConfig.type,
+        invitedEmails,
       },
       {
         onSuccess: (data) => {

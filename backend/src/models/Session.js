@@ -11,6 +11,11 @@ const sessionSchema = new mongoose.Schema(
       enum: ["easy", "medium", "hard"],
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["open", "custom"],
+      default: "open",
+    },
     host: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
